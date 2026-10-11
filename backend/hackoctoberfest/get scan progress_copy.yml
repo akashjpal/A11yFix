@@ -1,0 +1,15 @@
+info:
+  name: get scan progress
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/scans/scan_mv3jmfwa_1/issues/issue_color-contrast__a_aria_current__pag/fixes
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
