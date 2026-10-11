@@ -1,9 +1,10 @@
 import { Router } from 'express';
-import { setFix, getFix, updateFixStatus } from '../store/memory.js';
+import { setFix, getFix, updateFixStatus, getScan, getIssue } from '../store/memory.js';
 import { getOrCreateFixBranch, commitAndPush } from '../services/gitService.js';
 import { createPullRequest, hasPushAccess, ensureFork, waitForFork } from '../services/githubService.js';
 import { runBuild, rerunAxe } from '../services/verifier.js';
 import { applyPatch } from '../services/patchValidator.js';
+import { restartApp } from '../services/repoManager.js';
 
 const router = Router();
 
@@ -47,8 +48,36 @@ router.post('/:fixId/pull-request', async (req, res) => {
       return res.status(500).json({ error: 'Build verification failed' });
     }
 
-    // Optional: rerun axe to verify the fix
-    const verification = await rerunAxe(fix.repoPath, fix.appUrl, fix.routes || []);
+    // CRITICAL: restart the app so verification tests the NEW code.
+    // Vite serves stale modules until the dev server is restarted.
+    const scan = getScan(fix.scanId);
+    let appUrl = fix.appUrl;
+    if (scan?.appProcess) {
+      const restarted = await restartApp(fix.repoPath, fix.scanId, scan.appProcess);
+      appUrl = restarted.url;
+      scan.appProcess = restarted.process;
+      scan.appUrl = restarted.url;
+      scan.appPort = restarted.port;
+    } else {
+      console.warn('[fixes] No app process handle on scan — verifying against existing server (may be stale)');
+    }
+
+    // Verify the fix against the RESTARTED app — pass the original issue so
+    // we can check the SPECIFIC element is fixed, not just the total count
+    const issue = getIssue(fix.scanId, fix.issueId);
+    const verification = await rerunAxe(fix.repoPath, appUrl, fix.routes || [], issue);
+
+    // GATE: do not create a PR if the fix didn't actually work
+    if (issue && verification.targetFixed === false) {
+      updateFixStatus(fixId, 'failed', {
+        error: 'Verification failed — the issue is still present after the fix',
+        verification
+      });
+      return res.status(422).json({
+        error: 'Fix did not resolve the issue — PR not created',
+        verification
+      });
+    }
 
     // Create branch and commit
     const branchName = `a11yfix/${fix.ruleId}-${fix.issueId}`;
@@ -64,7 +93,7 @@ router.post('/:fixId/pull-request', async (req, res) => {
       await waitForFork(owner, repo);
     }
 
-    await commitAndPush(fix.repoPath, branchName, `fix: ${fix.summary}`, fork);
+    await commitAndPush(fix.repoPath, branchName, `fix: ${fix.summary} [${fix.issueId}]`, fork);
 
     // Create PR (base branch auto-detected; head comes from fork if read-only token)
     const pr = await createPullRequest({
@@ -72,7 +101,16 @@ router.post('/:fixId/pull-request', async (req, res) => {
       repo,
       headBranch: branchName,
       title: fix.summary,
-      body: `Automated accessibility fix.\n\nRule: ${fix.ruleId}\nIssue: ${fix.issueId}\nVerification: ${verification.violationCount} remaining violations`
+      body: `Automated accessibility fix.
+
+Rule: ${fix.ruleId}
+Issue: ${fix.issueId}
+
+## Verification (axe re-scan after fix)
+- ${verification.targetFixed === true ? '✅ Target issue resolved' : '⚠️ Target issue not individually tracked'}
+- Remaining violations (all rules): ${verification.violationCount}
+${Object.entries(verification.perRule || {}).map(([r, c]) => `- ${r}: ${c}`).join('\n')}
+${verification.newViolations?.length ? `\n⚠️ Same rule still fires on other elements (pre-existing, not introduced by this fix):\n${verification.newViolations.map(v => `- ${v.html}`).join('\n')}` : ''}`
     });
 
     updateFixStatus(fixId, 'completed', { prUrl: pr.prUrl, verification });

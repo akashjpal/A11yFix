@@ -31,8 +31,13 @@ Requirements:
 1. Generate ONLY the minimal change needed to fix this specific violation.
 2. Do NOT invent new accessibility issues or WCAG classifications.
 3. Return ONLY the complete corrected file content.
-4. Do NOT add explanations or comments about the fix.
+4. Do NOT add explanations or comments about the fix — EXCEPT the required traceability comment below.
 5. Preserve all existing functionality and styling.
+6. MANDATORY: Immediately next to the code you changed, add a short comment in the file's native comment syntax (// for JS/TS/JSX, <!-- --> for HTML, {/* */} for JSX inside markup, # for Python/YAML) with EXACTLY this format:
+   a11yfix: ${issue.issueId} (${issue.ruleId})
+   Example for a TSX file:
+   {/* a11yfix: ${issue.issueId} (${issue.ruleId}) */}
+   This comment is required for traceability — never omit it.
 
 Return the complete corrected source code. Do not wrap in markdown code blocks.`;
 

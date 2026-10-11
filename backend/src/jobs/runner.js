@@ -1,5 +1,6 @@
-import { updateScanStatus } from '../store/memory.js';
+import { updateScanStatus, getScan, addIssue } from '../store/memory.js';
 import { cloneRepo, installDeps, startApp, stopApp } from '../services/repoManager.js';
+import { scanDemoApp } from '../services/scanner.js';
 
 // Background job runner for scan workflow
 export async function runScanJob(scanId, repoUrl, routes) {
@@ -15,16 +16,26 @@ export async function runScanJob(scanId, repoUrl, routes) {
 
     updateScanStatus(scanId, 'scanning', 70);
 
-    const scan = await import('../store/memory.js').then(m => m.getScan(scanId));
+    // Run the axe scan BEFORE marking completed — otherwise API consumers
+    // polling for 'completed' would fetch issues before they exist (race)
+    const findings = await scanDemoApp(appUrl.url, routes);
+    for (const finding of findings) {
+      addIssue(scanId, finding);
+    }
+    console.log(`[runner] Scan ${scanId}: found ${findings.length} issue(s)`);
+
+    const scan = getScan(scanId);
     if (scan) {
       scan.appUrl = appUrl.url; // store the URL string, not the process object
       scan.repoPath = repoPath;
+      scan.appProcess = appUrl.process; // keep handle so the PR step can restart the app
+      scan.appPort = appUrl.port;
     }
 
     updateScanStatus(scanId, 'completed', 100);
   } catch (err) {
     updateScanStatus(scanId, 'failed', 0);
-    const scan = await import('../store/memory.js').then(m => m.getScan(scanId));
+    const scan = getScan(scanId);
     if (scan) scan.error = err.message;
   }
 }

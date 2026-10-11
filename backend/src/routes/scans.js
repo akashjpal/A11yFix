@@ -24,21 +24,9 @@ router.post('/', async (req, res) => {
 
     const scan = createScan(scanId, { repoUrl, routes: scanRoutes, status: 'queued', progress: 0 });
 
-    // Start background job
-    runScanJob(scanId, repoUrl, scanRoutes).then(async () => {
-      const completedScan = getScan(scanId);
-      if (completedScan && completedScan.status === 'completed' && completedScan.appUrl) {
-        // Run accessibility scan against the started app
-        const findings = await scanDemoApp(completedScan.appUrl, scanRoutes);
-        const scanRecord = getScan(scanId);
-        if (scanRecord) {
-          for (const finding of findings) {
-            scanRecord.issues.push(finding);
-          }
-        }
-        updateScanStatus(scanId, 'completed', 100);
-      }
-    }).catch(err => {
+    // Start background job — the axe scan runs INSIDE runScanJob, before the
+    // 'completed' status is set, so pollers never see completed with 0 issues
+    runScanJob(scanId, repoUrl, scanRoutes).catch(err => {
       updateScanStatus(scanId, 'failed', 0);
       const scanRecord = getScan(scanId);
       if (scanRecord) scanRecord.error = err.message;
