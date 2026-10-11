@@ -1,0 +1,20 @@
+info:
+  name: post-api-scans
+  type: http
+
+http:
+  method: POST
+  url: http://localhost:3000/api/scans
+  body:
+    type: json
+    data: |-
+      {
+        "repoUrl": "https://github.com/akashjpal/Hackoctober-fest-sample-website.git"
+      }
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5
