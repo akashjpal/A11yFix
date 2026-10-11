@@ -30,6 +30,7 @@ export function getIssues(scanId) {
 
 export function getFix(fixId) { return fixes.get(fixId); }
 export function setFix(fixId, record) { fixes.set(fixId, record); return record; }
+export function getAllFixes() { return Array.from(fixes.values()); }
 
 export function createScan(id, record) {
   const scan = { id, status: 'queued', progress: 0, issues: [], createdAt: new Date().toISOString(), ...record };

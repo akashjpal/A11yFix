@@ -5,6 +5,7 @@ import { runScanJob } from '../jobs/runner.js';
 import { createScan, updateScanStatus, getScan, getIssue, setFix, updateFixStatus } from '../store/memory.js';
 import { scanDemoApp } from '../services/scanner.js';
 import { generateFix } from '../services/aiFix.js';
+import { analyzeRepoStyle } from '../services/repoStyle.js';
 import { validatePatch } from '../services/patchValidator.js';
 import { uid } from '../utils/ids.js';
 
@@ -121,7 +122,13 @@ router.post('/:scanId/issues/:issueId/fixes', async (req, res) => {
           sourceCode = '// Source file not found for demo';
         }
 
-        const result = await generateFix(issue, sourceCode, sourceFile);
+        // Repo coding-practice analysis — computed once per scan, reused by
+        // every fix in this scan so the AI patches match the repo's own style
+        if (!scan.styleGuide) {
+          scan.styleGuide = analyzeRepoStyle(scan.repoPath);
+        }
+
+        const result = await generateFix(issue, sourceCode, sourceFile, scan.styleGuide);
 
         // Validate the patch
         const validation = validatePatch({ ...result, repoPath: scan.repoPath, filePath: sourceFile });

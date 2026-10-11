@@ -1,0 +1,15 @@
+info:
+  name: get scan progress
+  type: http
+  seq: 1
+
+http:
+  method: POST
+  url: http://localhost:3000/api/fixes/fix_mv3njko6_2/visual-test
+  auth: inherit
+
+settings:
+  encodeUrl: true
+  timeout: 0
+  followRedirects: true
+  maxRedirects: 5

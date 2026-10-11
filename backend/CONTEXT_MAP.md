@@ -49,7 +49,7 @@ The frontend is a separate concern (teammate's responsibility). The backend expo
 │ repoManager   │   │    scanner     │   │      aiFix         │   │ gitService +   │
 │ clone/install │   │ Playwright +   │   │ OpenRouter         │   │ githubService  │
 │ /start/RESTART│   │ axe-core       │   │ (ling-3.0-flash)   │   │ branch/commit/ │
-│ app, kill tree│   │                │   │ + issue-ID comment │   │ push (fork or  │
+│ app, kill tree│   │                │   │ + repoStyle-aware │   │ push (fork or  │
 └───────────────┘   └────────────────┘   └────────────────────┘   │ origin) + PR   │
                              │                       │             └────────────────┘
                              ▼                       ▼                     │
@@ -126,6 +126,9 @@ HackoctoverFest/
     │   ├── scanner.js            # Playwright navigation + axe-core violation collection
     │   ├── aiFix.js              # OpenRouter prompt + API call → { summary, filePath,
     │   │                         #   newContent }; requires a11yfix: <issueId> comment
+    │   ├── repoStyle.js          # heuristic repo convention analysis (indent, quotes,
+    │   │                         #   semicolons, component style, CSS approach) →
+    │   │                         #   style-guide string injected into fix prompt
     │   ├── patchValidator.js     # syntax/scope validation + file write (applyPatch)
     │   ├── gitService.js         # branch create, commit, push to origin OR fork remote
     │   ├── githubService.js      # hasPushAccess, ensureFork, waitForFork, PR creation

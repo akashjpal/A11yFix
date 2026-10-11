@@ -8,13 +8,19 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'inclusionai/ling-3.0-flash';
 const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
-export async function generateFix(issue, sourceCode, filePath) {
+export async function generateFix(issue, sourceCode, filePath, styleGuide = '') {
   if (!OPENROUTER_API_KEY) {
     throw new Error('OPENROUTER_API_KEY not configured — add it to backend/.env');
   }
 
-  const prompt = `You are an accessibility expert. Fix the following WCAG violation in the provided source code.
+  const styleSection = styleGuide
+    ? `\nRepo coding conventions (MUST follow):
+${styleGuide}
+`
+    : '';
 
+  const prompt = `You are an accessibility expert. Fix the following WCAG violation in the provided source code.
+${styleSection}
 Issue details:
 - Rule ID: ${issue.ruleId}
 - Description: ${issue.description}
@@ -33,7 +39,8 @@ Requirements:
 3. Return ONLY the complete corrected file content.
 4. Do NOT add explanations or comments about the fix — EXCEPT the required traceability comment below.
 5. Preserve all existing functionality and styling.
-6. MANDATORY: Immediately next to the code you changed, add a short comment in the file's native comment syntax (// for JS/TS/JSX, <!-- --> for HTML, {/* */} for JSX inside markup, # for Python/YAML) with EXACTLY this format:
+6. Match the repo's coding conventions listed above (indentation, quotes, component style, CSS approach) so the patch is indistinguishable from the repo's own code.
+7. MANDATORY: Immediately next to the code you changed, add a short comment in the file's native comment syntax (// for JS/TS/JSX, <!-- --> for HTML, {/* */} for JSX inside markup, # for Python/YAML) with EXACTLY this format:
    a11yfix: ${issue.issueId} (${issue.ruleId})
    Example for a TSX file:
    {/* a11yfix: ${issue.issueId} (${issue.ruleId}) */}

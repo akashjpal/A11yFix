@@ -4,8 +4,8 @@ info:
   seq: 1
 
 http:
-  method: POST
-  url: http://localhost:3000/api/fixes/fix_mv3jmyej_2/pull-request
+  method: GET
+  url: http://localhost:3000/api/fixes/fix_mv3njko6_2
   auth: inherit
 
 settings:
