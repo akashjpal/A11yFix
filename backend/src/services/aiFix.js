@@ -1,12 +1,16 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
-const GEMINI_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemma-2-2b:generateContent';
+// OpenRouter configuration
+// Model is configurable via .env (currently: inclusionai/ling-3.0-flash — paid tier).
+// No max_tokens cap and no reasoning override — the model manages its own output.
+const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
+const OPENROUTER_MODEL = process.env.OPENROUTER_MODEL || 'inclusionai/ling-3.0-flash';
+const OPENROUTER_URL = 'https://openrouter.ai/api/v1/chat/completions';
 
 export async function generateFix(issue, sourceCode, filePath) {
-  if (!GEMINI_API_KEY) {
-    throw new Error('GEMINI_API_KEY not configured');
+  if (!OPENROUTER_API_KEY) {
+    throw new Error('OPENROUTER_API_KEY not configured — add it to backend/.env');
   }
 
   const prompt = `You are an accessibility expert. Fix the following WCAG violation in the provided source code.
@@ -21,7 +25,6 @@ Issue details:
 
 Source file: ${filePath}
 Source code:
-\`\`\`${filePath.endsWith('.jsx') || filePath.endsWith('.tsx') ? 'tsx' : 'js'}\`\`\`
 ${sourceCode}
 
 Requirements:
@@ -33,33 +36,52 @@ Requirements:
 
 Return the complete corrected source code. Do not wrap in markdown code blocks.`;
 
-  const response = await fetch(GEMINI_URL, {
+  const response = await fetch(OPENROUTER_URL, {
     method: 'POST',
     headers: {
       'Content-Type': 'application/json',
-      'x-goog-api-key': GEMINI_API_KEY
+      'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+      'HTTP-Referer': 'http://localhost:3000',
+      'X-Title': 'A11yFix'
     },
     body: JSON.stringify({
-      contents: [{ parts: [{ text: prompt }] }],
-      generationConfig: { temperature: 0.1, maxOutputTokens: 4096 }
+      model: OPENROUTER_MODEL,
+      messages: [
+        { role: 'user', content: prompt }
+      ],
+      temperature: 0.1
+      // No max_tokens limit — let the model use its full output budget.
+      // No reasoning param — let the model decide how to work.
     })
   });
 
   if (!response.ok) {
-    throw new Error(`Gemma API error: ${response.status} ${response.statusText}`);
+    const errBody = await response.text().catch(() => '');
+    throw new Error(`OpenRouter API error: ${response.status} ${response.statusText} ${errBody.slice(0, 300)}`);
   }
 
   const data = await response.json();
-  const generatedText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+  const choice = data.choices?.[0];
+  const generatedText = choice?.message?.content;
 
-  if (!generatedText) {
-    throw new Error('No response generated from Gemma API');
+  if (!generatedText || generatedText.trim().length === 0) {
+    // Surface why the model returned nothing (finish_reason, length cutoffs, etc.)
+    const finish = choice?.finish_reason || 'unknown';
+    const usage = JSON.stringify(data.usage || {});
+    const raw = JSON.stringify(data).slice(0, 400);
+    throw new Error(`No response generated from OpenRouter API (finish_reason: ${finish}, usage: ${usage}, body: ${raw})`);
   }
+
+  // Strip markdown code fences if the model wrapped the file in them
+  const cleaned = generatedText
+    .replace(/^```[a-zA-Z]*\n/, '')
+    .replace(/\n```$/, '')
+    .trim();
 
   return {
     summary: `Fix for ${issue.ruleId}: ${issue.description}`,
     filePath,
-    newContent: generatedText.trim(),
+    newContent: cleaned,
     ruleId: issue.ruleId
   };
 }
